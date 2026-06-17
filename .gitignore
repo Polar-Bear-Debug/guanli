@@ -16,3 +16,5 @@ derby.log
 .cursor
 .history
 .claude
+# 根目录日志文件
+*.log

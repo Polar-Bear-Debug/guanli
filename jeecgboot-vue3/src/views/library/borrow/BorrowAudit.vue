@@ -31,9 +31,7 @@
 <script lang="ts" setup>
 import { ref, onMounted } from 'vue';
 import { message } from 'ant-design-vue';
-// 核心修复：1. 推荐使用官方虚拟别名 '/@/utils/http/axios' (绝不会因数错层级而报错)
-// 2. 如果你的环境别名失效，请切换为正确的 3 层相对路径: '../../../utils/http/axios'
-import { defHttp } from '/@/utils/http/axios';
+import { defHttp } from '../../../utils/http/axios';
 
 const columns = [
   { title: '流转审批单号', dataIndex: 'id', key: 'id' },

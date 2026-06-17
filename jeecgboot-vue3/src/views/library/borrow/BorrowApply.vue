@@ -5,13 +5,11 @@
       <p class="text-xs text-gray-400 mt-2">发起借阅流转申请，系统将自动校验借阅规则并异步扣减图书库存</p>
     </div>
 
-    <!-- 发起流转表单 -->
     <a-form :model="borrowForm" layout="vertical" @submit.prevent="submitBorrow" class="px-4">
-      <!-- 第一步：选择图书 -->
       <a-form-item label="第一步：检索并勾选目标借阅图书" required class="mb-6">
-        <a-select 
-          v-model:value="borrowForm.bookId" 
-          placeholder="请选择馆内当前在库的图书" 
+        <a-select
+          v-model:value="borrowForm.bookId"
+          placeholder="请选择馆内当前在库的图书"
           :loading="booksLoading"
           size="large"
           class="w-full"
@@ -25,30 +23,58 @@
         </div>
       </a-form-item>
 
-      <!-- 第二步：手动输入卡号 -->
-      <a-form-item label="第二步：指定发起借阅的读者会员 (直接输入学号/扫码枪扫入)" required class="mb-8">
-        <a-input 
-          v-model:value="borrowForm.readerId" 
-          placeholder="请直接输入读者学号或借书证卡号" 
+      <a-form-item label="第二步：指定发起借阅的读者会员 (直接输入学号/扫码枪扫入)" required class="mb-4">
+        <a-input
+          v-model:value="borrowForm.readerId"
+          placeholder="请直接输入读者学号或借书证卡号"
           size="large"
           class="w-full"
+          @blur="validateReader"
+          allowClear
         />
         <div class="text-xs text-gray-400 mt-1">
           💡 提示：支持物理扫码枪直接扫码录入证号，实现秒级流转。
         </div>
       </a-form-item>
 
-      <!-- 提交工作流控制 -->
+      <div v-if="readerCheckStatus === 'checking'" class="mb-6 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-600">
+        🔍 正在验证读者身份...
+      </div>
+      <div v-else-if="readerCheckStatus === 'found'" class="mb-6 p-3 bg-green-50 border border-green-200 rounded">
+        <div class="flex items-center justify-between">
+          <div>
+            <span class="text-sm font-bold text-green-700">✅ 读者已核实</span>
+            <span class="ml-3 text-sm text-gray-600">姓名：{{ foundReader.name }}</span>
+            <a-tag :color="foundReader.level === 2 ? 'gold' : 'blue'" class="ml-2">
+              {{ foundReader.level === 2 ? '高级会员' : '普通读者' }}
+            </a-tag>
+          </div>
+          <div class="text-xs text-gray-400">
+            最大借阅 {{ foundReader.level === 2 ? '10' : '3' }} 本 / {{ foundReader.level === 2 ? '90' : '30' }} 天
+          </div>
+        </div>
+      </div>
+      <div v-else-if="readerCheckStatus === 'notfound'" class="mb-6 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+        ❌ 未找到该读者卡号，请先在「读者花名册」页面注册该读者！
+      </div>
+      <div v-else-if="readerCheckStatus === 'error'" class="mb-6 p-3 bg-orange-50 border border-orange-200 rounded text-sm text-orange-600">
+        ⚠️ 读者校验接口异常，请确认后端服务已启动。
+      </div>
+
       <div class="text-center">
-        <a-button 
-          type="primary" 
-          html-type="submit" 
-          :loading="submitting" 
-          size="large" 
+        <a-button
+          type="primary"
+          html-type="submit"
+          :loading="submitting"
+          :disabled="readerCheckStatus !== 'found'"
+          size="large"
           class="w-full py-6 flex items-center justify-center font-bold text-lg rounded-md shadow-md"
         >
           确认流转申请并出库
         </a-button>
+        <div v-if="readerCheckStatus !== 'found' && borrowForm.readerId" class="text-xs text-gray-400 mt-2">
+          请先输入正确的读者卡号完成身份核验
+        </div>
       </div>
     </a-form>
   </div>
@@ -57,14 +83,15 @@
 <script lang="ts" setup>
 import { ref, onMounted, reactive } from 'vue';
 import { message } from 'ant-design-vue';
-// 核心修复：修改为正确的 3 层向上物理路径，解决 Failed to resolve import 报错！
 import { defHttp } from '../../../utils/http/axios';
 
 const books = ref<any[]>([]);
 const booksLoading = ref<boolean>(false);
 const submitting = ref<boolean>(false);
+const readerCheckStatus = ref<'idle' | 'checking' | 'found' | 'notfound' | 'error'>('idle');
+const foundReader = ref<any>(null);
 
-const borrowForm = reactive({ bookId: undefined, readerId: '' });
+const borrowForm = reactive({ bookId: undefined as string | undefined, readerId: '' });
 
 const loadFormOptions = async () => {
   booksLoading.value = true;
@@ -80,9 +107,39 @@ const loadFormOptions = async () => {
   }
 };
 
+const validateReader = async () => {
+  if (!borrowForm.readerId || borrowForm.readerId.trim() === '') {
+    readerCheckStatus.value = 'idle';
+    foundReader.value = null;
+    return;
+  }
+  readerCheckStatus.value = 'checking';
+  try {
+    const reader = await defHttp.get({ url: '/library/readers/findByCard', params: { card: borrowForm.readerId.trim() } });
+    if (reader) {
+      foundReader.value = reader;
+      readerCheckStatus.value = 'found';
+    } else {
+      readerCheckStatus.value = 'notfound';
+      foundReader.value = null;
+    }
+  } catch (err) {
+    readerCheckStatus.value = 'notfound';
+    foundReader.value = null;
+  }
+};
+
 const submitBorrow = async () => {
-  if (!borrowForm.bookId || !borrowForm.readerId) {
-    message.warning('请确保已选定目标图书并填写了读者卡号/学号！');
+  if (!borrowForm.bookId) {
+    message.warning('请先选择一本在库图书！');
+    return;
+  }
+  if (!borrowForm.readerId) {
+    message.warning('请输入读者卡号！');
+    return;
+  }
+  if (readerCheckStatus.value !== 'found') {
+    message.warning('请先通过读者身份核验（失焦输入框自动触发）！');
     return;
   }
   submitting.value = true;
@@ -91,6 +148,8 @@ const submitBorrow = async () => {
     message.success('流转成功！已向审批队列提交申请并异步预扣物理库存！');
     borrowForm.bookId = undefined;
     borrowForm.readerId = '';
+    readerCheckStatus.value = 'idle';
+    foundReader.value = null;
     await loadFormOptions();
   } catch (err) {
     message.error('流转失败，馆藏可用物理库存可能已为空，或网络连接故障！');

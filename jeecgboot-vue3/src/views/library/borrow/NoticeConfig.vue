@@ -1,4 +1,4 @@
-<!-- 物理路径：D:\JeecgBoot-main\jeecgboot-vue3\src\views\library\borrow\NoticeConfig.vue -->
+<!-- 物理绝对路径：D:\JeecgBoot-main\jeecgboot-vue3\src\views\library\borrow\NoticeConfig.vue -->
 <template>
   <div class="p-6 bg-white rounded-lg shadow-sm max-w-2xl mx-auto my-6 border border-gray-100">
     <div class="mb-6 border-b pb-4 text-center">
@@ -6,6 +6,7 @@
       <p class="text-xs text-gray-400 mt-1">配置当读者借阅即将到期或已经逾期时，系统自动触发生效的推送文案</p>
     </div>
 
+    <!-- 表单配置区 -->
     <a-form layout="vertical" class="px-4">
       <a-form-item label="触发限期提醒阈值" required>
         <a-select value="3" class="w-full">
@@ -19,7 +20,9 @@
       </a-form-item>
 
       <div class="text-center mt-6">
-        <a-button type="primary" size="large" @click="handleSave">保存模版配置</a-button>
+        <a-button type="primary" size="large" @click="handleSave">
+          保存模版配置
+        </a-button>
       </div>
     </a-form>
   </div>
@@ -29,6 +32,6 @@
 import { message } from 'ant-design-vue';
 
 const handleSave = () => {
-  message.success('通知推送规则及消息模版配置成功，后台规则引擎已重新装载！');
+  message.success('通知触发规则及消息模版配置成功，后台规则引擎已重新装载！');
 };
 </script>
